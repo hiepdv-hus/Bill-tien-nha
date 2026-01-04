@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bill Tiền Nhà</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Nhập Thông Tin Hóa Đơn</h1>
+        <form id="billForm">
+            <div class="form-group">
+                <label for="month">Tháng:</label>
+                <input type="text" id="month" name="month" placeholder="Ví dụ: Tháng 12" required>
+            </div>
+            <div class="form-group">
+                <label for="roomRent">Tiền phòng (VNĐ):</label>
+                <input type="text" id="roomRent" name="roomRent" placeholder="2.800.000" required>
+            </div>
+            <div class="form-group">
+                <label for="utilities">Tiền điện, nước (VNĐ):</label>
+                <input type="text" id="utilities" name="utilities" placeholder="480.000" required>
+            </div>
+            <div class="form-group">
+                <label for="peopleCount">Máy giặt: 50k / 1 người - Số người:</label>
+                <input type="number" id="peopleCount" name="peopleCount" placeholder="1" min="0" value="1" required>
+            </div>
+            <button type="button" id="downloadBtn">Tải về</button>
+        </form>
+    </div>
+
+    <!-- Template bill để xuất PDF (ẩn) -->
+    <div id="billTemplate" style="display: none;">
+        <div class="bill-container">
+            <div class="bill-header">
+                <div class="bill-month" id="billMonth">Tháng 12</div>
+                <div class="bill-currency">Số tiền (VNĐ)</div>
+            </div>
+            <div class="bill-row">
+                <div class="bill-label">Tiền phòng</div>
+                <div class="bill-amount" id="billRoomRent">2.800.000</div>
+            </div>
+            <div class="bill-row">
+                <div class="bill-label">Tiền điện, nước</div>
+                <div class="bill-amount" id="billUtilities">480.000</div>
+            </div>
+            <div class="bill-row">
+                <div class="bill-label" id="billWashingMachineLabel">Máy giặt (1 người)</div>
+                <div class="bill-amount" id="billWashingMachine">50.000</div>
+            </div>
+            <div class="bill-total">
+                <div class="bill-label-total">Tổng cộng</div>
+                <div class="bill-amount-total" id="billTotal">3.280.000</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Format số tiền với dấu chấm phân cách hàng nghìn
+        function formatCurrency(amount) {
+            if (!amount && amount !== 0) return "0";
+            const numStr = amount.toString();
+            // Loại bỏ tất cả dấu chấm hiện có
+            const cleanStr = numStr.replace(/\./g, '');
+            // Thêm dấu chấm phân cách hàng nghìn
+            return cleanStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        // Lấy giá trị số từ input đã format
+        function getNumericValue(inputValue) {
+            return parseInt(inputValue.replace(/\./g, '')) || 0;
+        }
+
+        // Format input khi người dùng nhập
+        function setupInputFormatting(inputId) {
+            const input = document.getElementById(inputId);
+            input.addEventListener('input', function (e) {
+                // Lấy giá trị và loại bỏ tất cả ký tự không phải số
+                let value = e.target.value.replace(/[^\d]/g, '');
+                // Format lại với dấu chấm
+                if (value) {
+                    e.target.value = formatCurrency(value);
+                } else {
+                    e.target.value = '';
+                }
+            });
+        }
+
+        // Thiết lập format cho các input số tiền
+        setupInputFormatting('roomRent');
+        setupInputFormatting('utilities');
+
+        // Thiết lập giá trị mặc định khi trang load
+        window.addEventListener('DOMContentLoaded', function () {
+            // Lấy tháng và năm hiện tại
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1; // getMonth() trả về 0-11
+            const currentYear = now.getFullYear();
+
+            // Đặt giá trị mặc định cho input tháng
+            document.getElementById('month').value = `Tháng ${currentMonth} (${currentYear})`;
+
+            // Đặt giá trị mặc định cho tiền phòng là 2800000
+            document.getElementById('roomRent').value = formatCurrency(2800000);
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', function () {
+            const month = document.getElementById('month').value;
+            const roomRent = getNumericValue(document.getElementById('roomRent').value);
+            const utilities = getNumericValue(document.getElementById('utilities').value);
+            const peopleCount = parseInt(document.getElementById('peopleCount').value) || 0;
+            const washingMachine = peopleCount * 50000; // 50k mỗi người
+            const total = roomRent + utilities + washingMachine;
+
+            // Cập nhật template
+            document.getElementById('billMonth').textContent = month;
+            document.getElementById('billRoomRent').textContent = formatCurrency(roomRent);
+            document.getElementById('billUtilities').textContent = formatCurrency(utilities);
+            document.getElementById('billWashingMachineLabel').textContent = `Máy giặt (${peopleCount} người)`;
+            document.getElementById('billWashingMachine').textContent = formatCurrency(washingMachine);
+            document.getElementById('billTotal').textContent = formatCurrency(total);
+
+            // Lấy element bill-container để xuất ảnh
+            const billContainer = document.querySelector('.bill-container');
+            const billTemplate = document.getElementById('billTemplate');
+
+            // Hiển thị tạm thời để chụp ảnh
+            billTemplate.style.display = 'block';
+
+            // Chụp ảnh chỉ phần bill-container
+            html2canvas(billContainer, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: false,
+                width: billContainer.offsetWidth,
+                height: billContainer.offsetHeight
+            }).then(function (canvas) {
+                // Tạo link tải về
+                const link = document.createElement('a');
+                link.download = `Tiền nhà ${month}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                // Ẩn lại element
+                billTemplate.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -29,6 +29,20 @@
                 <label for="peopleCount">Máy giặt: 50k / 1 người - Số người:</label>
                 <input type="number" id="peopleCount" name="peopleCount" placeholder="1" min="0" value="1" required>
             </div>
+            <div class="form-group">
+                <label>Các khoản khác:</label>
+                <div id="extraItemsContainer">
+                    <div class="extra-item-row">
+                        <input type="text" class="extra-name" placeholder="Ví dụ: Tiền rác">
+                        <input type="text" class="extra-amount" placeholder="50.000">
+                        <button type="button" class="remove-extra-btn">X</button>
+                    </div>
+                </div>
+                <button type="button" id="addExtraItemBtn">+ Thêm mục</button>
+            </div>
+            <div class="form-group">
+                <strong>Tổng tiền: <span id="formTotalAmount">0</span> VNĐ</strong>
+            </div>
             <button type="button" id="downloadBtn">Tải về</button>
         </form>
     </div>
@@ -52,6 +66,7 @@
                 <div class="bill-label" id="billWashingMachineLabel">Máy giặt (1 người)</div>
                 <div class="bill-amount" id="billWashingMachine">50.000</div>
             </div>
+            <div id="billExtraItems"></div>
             <div class="bill-total">
                 <div class="bill-label-total">Tổng cộng</div>
                 <div class="bill-amount-total" id="billTotal">3.280.000</div>
@@ -76,12 +91,15 @@
         }
 
         // Format input khi người dùng nhập
-        function setupInputFormatting(inputId) {
-            const input = document.getElementById(inputId);
+        function setupInputFormatting(inputElementOrId) {
+            const input = typeof inputElementOrId === 'string'
+                ? document.getElementById(inputElementOrId)
+                : inputElementOrId;
+
+            if (!input) return;
+
             input.addEventListener('input', function (e) {
-                // Lấy giá trị và loại bỏ tất cả ký tự không phải số
                 let value = e.target.value.replace(/[^\d]/g, '');
-                // Format lại với dấu chấm
                 if (value) {
                     e.target.value = formatCurrency(value);
                 } else {
@@ -90,11 +108,37 @@
             });
         }
 
-        // Thiết lập format cho các input số tiền
+        // Tính tổng tất cả các khoản
+        function calculateTotal() {
+            const roomRent = getNumericValue(document.getElementById('roomRent').value || '0');
+            const utilities = getNumericValue(document.getElementById('utilities').value || '0');
+            const peopleCount = parseInt(document.getElementById('peopleCount').value) || 0;
+            const washingMachine = peopleCount * 50000;
+
+            let extraTotal = 0;
+            document.querySelectorAll('.extra-amount').forEach(function (input) {
+                const val = input.value || '0';
+                extraTotal += getNumericValue(val);
+            });
+
+            const total = roomRent + utilities + washingMachine + extraTotal;
+            document.getElementById('formTotalAmount').textContent = formatCurrency(total);
+
+            return {
+                roomRent,
+                utilities,
+                peopleCount,
+                washingMachine,
+                extraTotal,
+                total
+            };
+        }
+
+        // Thiết lập format cho các input số tiền cố định
         setupInputFormatting('roomRent');
         setupInputFormatting('utilities');
 
-        // Thiết lập giá trị mặc định khi trang load
+        // Thiết lập giá trị mặc định khi trang load, cấu hình sự kiện
         window.addEventListener('DOMContentLoaded', function () {
             // Lấy tháng và năm hiện tại
             const now = new Date();
@@ -106,48 +150,138 @@
 
             // Đặt giá trị mặc định cho tiền phòng là 2800000
             document.getElementById('roomRent').value = formatCurrency(2800000);
-        });
 
-        document.getElementById('downloadBtn').addEventListener('click', function () {
-            const month = document.getElementById('month').value;
-            const roomRent = getNumericValue(document.getElementById('roomRent').value);
-            const utilities = getNumericValue(document.getElementById('utilities').value);
-            const peopleCount = parseInt(document.getElementById('peopleCount').value) || 0;
-            const washingMachine = peopleCount * 50000; // 50k mỗi người
-            const total = roomRent + utilities + washingMachine;
+            // Thiết lập format cho khoản extra mặc định
+            document.querySelectorAll('.extra-amount').forEach(function (input) {
+                setupInputFormatting(input);
+            });
 
-            // Cập nhật template
-            document.getElementById('billMonth').textContent = month;
-            document.getElementById('billRoomRent').textContent = formatCurrency(roomRent);
-            document.getElementById('billUtilities').textContent = formatCurrency(utilities);
-            document.getElementById('billWashingMachineLabel').textContent = `Máy giặt (${peopleCount} người)`;
-            document.getElementById('billWashingMachine').textContent = formatCurrency(washingMachine);
-            document.getElementById('billTotal').textContent = formatCurrency(total);
+            // Sự kiện thay đổi để cập nhật tổng
+            document.getElementById('roomRent').addEventListener('input', calculateTotal);
+            document.getElementById('utilities').addEventListener('input', calculateTotal);
+            document.getElementById('peopleCount').addEventListener('input', calculateTotal);
 
-            // Lấy element bill-container để xuất ảnh
-            const billContainer = document.querySelector('.bill-container');
-            const billTemplate = document.getElementById('billTemplate');
+            document.getElementById('extraItemsContainer').addEventListener('input', function (e) {
+                if (e.target.classList.contains('extra-amount')) {
+                    calculateTotal();
+                }
+            });
 
-            // Hiển thị tạm thời để chụp ảnh
-            billTemplate.style.display = 'block';
+            // Nút thêm khoản khác
+            document.getElementById('addExtraItemBtn').addEventListener('click', function () {
+                const container = document.getElementById('extraItemsContainer');
+                const row = document.createElement('div');
+                row.className = 'extra-item-row';
 
-            // Chụp ảnh chỉ phần bill-container
-            html2canvas(billContainer, {
-                scale: 2,
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                logging: false,
-                width: billContainer.offsetWidth,
-                height: billContainer.offsetHeight
-            }).then(function (canvas) {
-                // Tạo link tải về
-                const link = document.createElement('a');
-                link.download = `Tiền nhà ${month}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'extra-name';
+                nameInput.placeholder = 'Ví dụ: Tiền rác';
 
-                // Ẩn lại element
-                billTemplate.style.display = 'none';
+                const amountInput = document.createElement('input');
+                amountInput.type = 'text';
+                amountInput.className = 'extra-amount';
+                amountInput.placeholder = '50.000';
+                setupInputFormatting(amountInput);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'remove-extra-btn';
+                removeBtn.textContent = 'X';
+                removeBtn.addEventListener('click', function () {
+                    row.remove();
+                    calculateTotal();
+                });
+
+                row.appendChild(nameInput);
+                row.appendChild(amountInput);
+                row.appendChild(removeBtn);
+                container.appendChild(row);
+            });
+
+            // Nút xoá cho dòng extra mặc định
+            document.querySelectorAll('.remove-extra-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const row = btn.closest('.extra-item-row');
+                    if (row) {
+                        row.remove();
+                        calculateTotal();
+                    }
+                });
+            });
+
+            // Tính tổng lần đầu
+            calculateTotal();
+
+            // Sự kiện tải về
+            document.getElementById('downloadBtn').addEventListener('click', function () {
+                const month = document.getElementById('month').value;
+                const totals = calculateTotal();
+
+                // Cập nhật template cố định
+                document.getElementById('billMonth').textContent = month;
+                document.getElementById('billRoomRent').textContent = formatCurrency(totals.roomRent);
+                document.getElementById('billUtilities').textContent = formatCurrency(totals.utilities);
+                document.getElementById('billWashingMachineLabel').textContent = `Máy giặt (${totals.peopleCount} người)`;
+                document.getElementById('billWashingMachine').textContent = formatCurrency(totals.washingMachine);
+
+                // Xử lý các khoản extra vào bill
+                const billExtraContainer = document.getElementById('billExtraItems');
+                billExtraContainer.innerHTML = '';
+                const extraRows = document.querySelectorAll('.extra-item-row');
+                extraRows.forEach(function (row) {
+                    const name = (row.querySelector('.extra-name')?.value || '').trim();
+                    const amountStr = row.querySelector('.extra-amount')?.value || '';
+                    const amount = getNumericValue(amountStr);
+
+                    if (!name && amount === 0) {
+                        return; // bỏ qua dòng trống
+                    }
+
+                    const billRow = document.createElement('div');
+                    billRow.className = 'bill-row';
+
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'bill-label';
+                    labelDiv.textContent = name || 'Khoản khác';
+
+                    const amountDiv = document.createElement('div');
+                    amountDiv.className = 'bill-amount';
+                    amountDiv.textContent = formatCurrency(amount);
+
+                    billRow.appendChild(labelDiv);
+                    billRow.appendChild(amountDiv);
+                    billExtraContainer.appendChild(billRow);
+                });
+
+                // Tổng cuối cùng
+                document.getElementById('billTotal').textContent = formatCurrency(totals.total);
+
+                // Lấy element bill-container để xuất ảnh
+                const billContainer = document.querySelector('.bill-container');
+                const billTemplate = document.getElementById('billTemplate');
+
+                // Hiển thị tạm thời để chụp ảnh
+                billTemplate.style.display = 'block';
+
+                // Chụp ảnh chỉ phần bill-container
+                html2canvas(billContainer, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    logging: false,
+                    width: billContainer.offsetWidth,
+                    height: billContainer.offsetHeight
+                }).then(function (canvas) {
+                    // Tạo link tải về
+                    const link = document.createElement('a');
+                    link.download = `Tiền nhà ${month}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+
+                    // Ẩn lại element
+                    billTemplate.style.display = 'none';
+                });
             });
         });
     </script>
